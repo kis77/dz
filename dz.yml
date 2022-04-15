@@ -1,0 +1,60 @@
+- hosts: all  
+  become: true
+
+  tasks:
+    - name: "Install prom-node-exp_docker_docker-compose"
+      apt:
+        name:
+          - prometheus-node-exporter
+          - docker
+          - docker-compose
+        state: present
+        update_cache: true
+
+    - name: "ARG for grafana DB1860"
+      lineinfile:
+        dest: /etc/default/prometheus-node-exporter
+        regexp: '^ARGS'
+        insertbefore: BOF
+        line: 'ARGS="--collector.processes"'
+
+    - name: "Node Exporter restart to apply ARG"
+      service:
+        name: prometheus-node-exporter
+        enabled: true
+        state: restarted
+    
+    - name:  "Check docker valid"
+      command: docker --version
+      register: docker_valid
+    
+    - name: "Check docker-compose valid"
+      command: docker-compose --version
+      register: docker_compose_vsn
+
+    - name: "Deploy docker-compose stack"
+      docker_compose:
+                project_src: /home/vagrant/dc/
+                files:
+                  - docker-compose.yml
+
+    - name: "Wait&validate grafana"
+      wait_for:
+        host: 127.0.0.1
+        port: 3000
+        delay: 3
+   
+    - name: "Import Grafana dashboard"
+      community.grafana.grafana_dashboard:
+        grafana_url: http://localhost:3000
+        grafana_user: "admin"
+        grafana_password: "grafana"
+        dashboard_url: https://grafana.com/api/dashboards/1860/revisions/26/download
+
+    - name: "Restart containers"
+      docker_compose:
+              project_src: /home/vagrant/dc/
+              restarted: yes
+
+
+    
